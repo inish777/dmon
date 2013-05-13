@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 
-from libdmon import Host, cfg
+from libdmon import Host, cfg, hosts
 
-hosts = {}
 for hostname, params in cfg.items():
-  hosts[hostname] = Host(hostname=hostname, cfg=cfg)
+  Host(hostname=hostname, cfg=cfg)
 
 def test_peerselection():
   host = hosts["host1"]
-  print(host.get_peers())
+  host.start()
+  host.join()
+
+
+if __name__ == '__main__':
+  test_peerselection()

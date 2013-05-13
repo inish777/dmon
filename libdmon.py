@@ -1,7 +1,14 @@
 #!/usr/bin/env python3
-from pprint import pprint
-from threading import Thread
 from queue import Queue, Empty
+from threading import Thread
+from pprint import pprint
+import logging
+import time
+
+
+#logger = logging.getLogger()
+#logger.setLevel(logging.DEBUG)
+logging.basicConfig(level=logging.DEBUG)
 
 cfg = {}
 for x in range(8):
@@ -9,7 +16,7 @@ for x in range(8):
   cfg[hostname] = dict(addr=("localhost", 6600+x), id=x)
 MINID = 0
 MAXID = x
-pprint("your config, bro:")
+print("your config, bro:")
 pprint(cfg)
 
 class st:
@@ -17,16 +24,21 @@ class st:
   down = 2
 
 
+hosts = {}
 class Host(Thread):
-  addr = None # smth like (addr, port)
-  status = None #
+  addr = None       # smth like (addr, port)
+  status = st.down  # is host up?
+  interval = 3      # peers poke interval
 
   def __init__(self, hostname, cfg):
     self.hostname = hostname
     self.cfg = cfg
     self.status = st.down
     self.queue = Queue()
-    super().__init__()
+    self.log = logging.getLogger(hostname)
+    self.log.setLevel(logging.DEBUG)
+    super().__init__(daemon=True)
+    hosts[hostname] = self
 
   def do_start(self):
     "normal start"
@@ -63,12 +75,31 @@ class Host(Thread):
         p_id = MAXID
       elif p_id > MAXID:
         p_id = 0
-      peers += [ cfg["host%s"%p_id] ]
+      peers += [ hosts["host%s"%p_id] ]
     return peers
 
+  def notify_peers(self):
+    peers = self.get_peers()
+    self.log.debug("it's time to poke our peers %s!" % peers)
+    for peer in peers:
+      self.log.debug("tackling %s" % peer)
+      peer.send_msg(self.hostname)
+    #TODO: here we can process peers and send notifications
+
   def run(self):
+    next_check = self.interval
     while True:
-      msg = self.queue.get()
+      delta = -time.time()
+      try:
+        self.log.debug("waiting for a message for %ss" % next_check)
+        msg = self.queue.get(timeout=next_check)
+      except Empty:
+        pass
+      delta += time.time()
+      next_check -= delta
+      if next_check < 0:
+        next_check = self.interval
+        self.notify_peers()
 
 
 def main():
