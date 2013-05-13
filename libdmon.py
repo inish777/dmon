@@ -26,9 +26,10 @@ class st:
 
 hosts = {}
 class Host(Thread):
-  addr = None       # smth like (addr, port)
-  status = st.down  # is host up?
-  interval = 3      # peers poke interval
+  addr     = None       # smth like (addr, port)
+  status   = st.down    # is host up?
+  interval = 1          # peers poke interval
+  timeout  = 10         # host ping timeout
 
   def __init__(self, hostname, cfg):
     self.hostname = hostname
@@ -37,6 +38,7 @@ class Host(Thread):
     self.queue = Queue()
     self.log = logging.getLogger(hostname)
     self.log.setLevel(logging.DEBUG)
+    self.last_seen = {}  # when did we see our peers last time?
     super().__init__(daemon=True)
     hosts[hostname] = self
 
@@ -76,6 +78,7 @@ class Host(Thread):
       elif p_id > MAXID:
         p_id = 0
       peers += [ hosts["host%s"%p_id] ]
+    assert self not in peers, "TODO: why I'm monitoring myself??"  # check that in small nets nodes do not monitor theirselves
     return peers
 
   def notify_peers(self):
@@ -84,7 +87,15 @@ class Host(Thread):
     for peer in peers:
       self.log.debug("tackling %s" % peer)
       peer.send_msg(self.hostname)
+      if peer not in self.last_seen:
+        self.last_seen[peer.hostname] = None
+    now = time.time()
     #TODO: here we can process peers and send notifications
+    #  naive example:
+    for peer, last_seen in self.last_seen.items():
+      self.log.debug("checking peer %s that was last seen %s" % (peer, last_seen))
+      if not last_seen or now - last_seen > self.timeout:
+        self.log.critical("host is unreachable")
 
   def run(self):
     next_check = self.interval
@@ -93,6 +104,7 @@ class Host(Thread):
       try:
         self.log.debug("waiting for a message for %ss" % next_check)
         msg = self.queue.get(timeout=next_check)
+        self.last_seen[msg] = time.time()
       except Empty:
         pass
       delta += time.time()
