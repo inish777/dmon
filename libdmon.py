@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 from pprint import pprint
+from threading import Thread
+from queue import Queue, Empty
 
 cfg = {}
 for x in range(8):
@@ -15,7 +17,7 @@ class st:
   down = 2
 
 
-class Host:
+class Host(Thread):
   addr = None # smth like (addr, port)
   status = None #
 
@@ -23,24 +25,36 @@ class Host:
     self.hostname = hostname
     self.cfg = cfg
     self.status = st.down
+    self.queue = Queue()
+    super().__init__()
 
-  def start(self):
+  def do_start(self):
     "normal start"
     self.status = st.up
     raise NotImplementedError
 
-  def stop(self):
+  def do_stop(self):
     "graceful shutdown"
     self.status = st.down
+    "flush queue"
+    try:
+      while True: self.queue.get_nowait()
+    except Empty:
+      pass
     raise NotImplementedError
 
-  def kill(self):
+  def do_kill(self):
     "suddenly kill node"
     self.status = st.down
     raise NotImplementedError
 
+  def send_msg(self, msg):
+    if self.status == st.down:
+      return
+    self.queue.put_nowait(msg)
+
   def get_peers(self):
-    "here is your super-duper algo"
+    "here is your super-duper peer selection algo"
     id = self.cfg[self.hostname]['id']
     peers_ids = [id-1, id+1]
     peers = []
@@ -51,6 +65,10 @@ class Host:
         p_id = 0
       peers += [ cfg["host%s"%p_id] ]
     return peers
+
+  def run(self):
+    while True:
+      msg = self.queue.get()
 
 
 def main():
