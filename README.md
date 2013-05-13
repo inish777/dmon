@@ -7,5 +7,5 @@ It requires almost no setup and shipped with many examples.
 TODO
 ----
 
-- [] "simple setup"
-- [] many examples mentioned before
+- [ ] "simple setup"
+- [ ] many examples mentioned before
